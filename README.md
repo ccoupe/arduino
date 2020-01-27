@@ -7,4 +7,6 @@ IO pins.
 
 family-1 uses a homie v3 topic structure be default and must be matched
 with a hubitat driver (my MQTT Motion V3 for example, 
-[found here](https://github.com/ccoupe/hubitat))
+[found here](https://github.com/ccoupe/hubitat)) Note: if you build the
+old version of the driver by #define OLD in Device.h then you should use
+the groovy V2 driver. 

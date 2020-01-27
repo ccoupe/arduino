@@ -11,3 +11,8 @@ with a hubitat driver (my MQTT Motion V3 for example,
 [found here](https://github.com/ccoupe/hubitat)) Note: if you build the
 old version of the driver by #define OLD in Device.h then you should use
 the groovy V2 driver. 
+
+A note on git branches
+V2 - C like api - no OLD define available. needs matching goovy drivers (v2 or V3)
+V3 - C++ api
+leif - Uses https://github.com/leifclaesson/LeifHomieLib.git

@@ -6,7 +6,7 @@
 #undef OLD
 #endif
 
-#define WIFI_USER "CJCNET"
+#define WIFI_ID "CJCNET"
 #define WIFI_PASSWORD "LostAgain2"
 
 #define MQTT_SERVER "192.168.1.7"
@@ -22,7 +22,10 @@
 #define HNAME "KeyStudio1 PIR"
 #define HPUB "homie/"HDEVICE"/sensor/motion"
 #define HSUB "homie/"HDEVICE"/sensor/active_hold/set"
+#define HSUBQ "homie/"HDEVICE"/sensor/active_hold"
 #endif
+
+
 // Keystudio pir motion sensor
 #define  pirSensor 23
 #define ACTIVE 1
@@ -30,12 +33,14 @@
 
 // these variables are defined in the driver and shared with mqtt_lib
 extern int state;
-extern boolean turnedOn;      // controls whether device sends to MQTT
+extern boolean turnedOn;      // controls whether device sends to MQTT - not used?
 extern unsigned int delaySeconds;
 
 // Functions in mqtt_lib.cpp 
 
-extern void mqtt_setup();
+extern void mqtt_setup(char *wusr, char *wpw,
+    char *mqsrv, int mqport, char* mqdev,
+    char *hdev, char *hnm, char *hp, char *hs);
 extern void mqtt_reconnect();
 extern void mqtt_loop();
 extern void mqtt_send_config();

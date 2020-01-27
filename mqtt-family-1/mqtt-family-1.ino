@@ -11,7 +11,8 @@
 #include <Wire.h>
 #include "Device.h"
 
-boolean turnedOn = true;  // controls whether device sends to MQTT
+
+boolean turnedOn = true;  // controls whether device sends to MQTT - not used?
 int state = INACTIVE;
 
 hw_timer_t * timer = NULL;
@@ -46,7 +47,8 @@ void IRAM_ATTR onTimer(){
 void setup() {
   Serial.begin(115200);
   Serial.println("Starting");
-  mqtt_setup();
+  mqtt_setup(WIFI_ID, WIFI_PASSWORD, MQTT_SERVER, MQTT_PORT, MQTT_DEVICE,
+      HDEVICE, HNAME, HPUB, HSUB);
   //client.setServer(mqtt_server, 1883);
   //client.setCallback(callback);
   // Create semaphore to inform us when the timer has fired
@@ -75,6 +77,7 @@ void setup() {
 
 void loop() {
   mqtt_loop();
+      
   if (havePir && state == INACTIVE) {
     if (turnedOn) {
 #ifdef OLD

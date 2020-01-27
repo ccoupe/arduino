@@ -8,11 +8,17 @@
 #include <PubSubClient.h>
 #include <Arduino_JSON.h>
 #include "Device.h"
+#include <stdlib.h>
 
-//const char* ssid = WIFI_USER;
-//const char* password = WIFI_PASSWORD;
-const char* mqtt_server = MQTT_SERVER;
-char *homie_pub = HPUB;
+char *wifi_id;
+char *wifi_password;
+char *mqtt_server;
+int  mqtt_port;
+char *mqtt_device;
+char *hdevice;
+char *hname;
+char *hpub;
+char *hsub;
 WiFiClient espClient;
 PubSubClient client(espClient);
 
@@ -21,9 +27,9 @@ static void setup_wifi() {
   // We start by connecting to a WiFi network
   Serial.println();
   Serial.print("Connecting to ");
-  Serial.println(WIFI_USER);
+  Serial.println(wifi_id);
 
-  WiFi.begin(WIFI_USER, WIFI_PASSWORD);
+  WiFi.begin(wifi_id, wifi_password);
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -36,27 +42,88 @@ static void setup_wifi() {
   Serial.println(WiFi.localIP());
 }
 
-void mqtt_setup() {
+void mqtt_setup(char *wid, char *wpw, char *mqsrv, int mqport, char* mqdev,
+    char *hdev, char *hnm, char *hp, char *hs) {
+      
+  wifi_id = wid;
+  wifi_password = wpw;
+  mqtt_server = mqsrv;
+  mqtt_port = mqport;
+  mqtt_device = mqdev;
+  hdevice = hdev;
+  hname = hnm;
+  hpub = hp;
+  hsub = hs;
+
   setup_wifi();
-  client.setServer(MQTT_SERVER, MQTT_PORT);
+  client.setServer(mqtt_server, mqtt_port);
   client.setCallback(mqtt_callback);
   mqtt_reconnect();
 #ifndef OLD  
   // Create and Publish the infrastructure topics for Homie v3
-  mqtt_homie_pub("homie/"HDEVICE"/$homie", "3.0", true);
-  mqtt_homie_pub("homie/"HDEVICE"/$name", HNAME, true);
-  mqtt_homie_pub("homie/"HDEVICE"/$nodes", "sensor", true);
-  mqtt_homie_pub("homie/"HDEVICE"/sensor/$name", "motion detector", true);
-  mqtt_homie_pub("homie/"HDEVICE"/sensor/$type", "motion", true);
-  mqtt_homie_pub("homie/"HDEVICE"/sensor/$properties", "motion,active_hold", true);
+  // TODO: not unicode compatible!
+  char tmp[100] = {};
+  char hpfix[30] = {};
+  strcpy(hpfix,"homie/");
+  strcpy(hpfix+6, hdevice);
+  int i = strlen(hpfix);
+  char *p = tmp+i;
+  strcpy(tmp,hpfix);
+  
+  //mqtt_homie_pub("homie/"HDEVICE"/$homie", "3.0", true);
+  strcpy(p, "/$homie");
+  mqtt_homie_pub(tmp, "3.0", true);
+  
+  //mqtt_homie_pub("homie/"HDEVICE"/$name", HNAME, true);
+  strcpy(p, "/$name");
+  mqtt_homie_pub(tmp, hname, true);
+  
+  //mqtt_homie_pub("homie/"HDEVICE"/$nodes", "sensor", true);
+  strcpy(p, "/$nodes");
+  mqtt_homie_pub(tmp, "sensor", true);
+  
+  //mqtt_homie_pub("homie/"HDEVICE"/sensor/$name", "motion detector", true);
+  strcpy(p, "/sensor/$name");
+  mqtt_homie_pub(tmp, "motion detector", true);
+  
+  //mqtt_homie_pub("homie/"HDEVICE"/sensor/$type", "motion", true);
+  strcpy(p, "/sensor/$type");
+  mqtt_homie_pub(tmp, "motion", true);
+  
+  //mqtt_homie_pub("homie/"HDEVICE"/sensor/$properties", "motion,active_hold", true);
+  strcpy(p, "/sensor/$properties");
+  mqtt_homie_pub(tmp, "motion,active_hold", true);
+  
   // Property 'motion'
-  mqtt_homie_pub("homie/"HDEVICE"/sensor/motion/$name", "Motion State", true);
-  mqtt_homie_pub("homie/"HDEVICE"/sensor/motion/$datatype", "string", true);
-  mqtt_homie_pub("homie/"HDEVICE"/sensor/motion/$settable", "false", true);
+  //mqtt_homie_pub("homie/"HDEVICE"/sensor/motion/$name", "Motion State", true);
+  strcpy(p, "/sensor/motion/$name");
+  mqtt_homie_pub(tmp, "Motion State", true);
+
+  //mqtt_homie_pub("homie/"HDEVICE"/sensor/motion/$datatype", "string", true);
+  strcpy(p, "/sensor/motion/$datatype");
+  mqtt_homie_pub(tmp, "string", true);
+
+  //mqtt_homie_pub("homie/"HDEVICE"/sensor/motion/$settable", "false", true);
+  strcpy(p, "/sensor/motion/$settable");
+  mqtt_homie_pub(tmp, "false", true);
+  
   // Property 'active_hold'
-  mqtt_homie_pub("homie/"HDEVICE"/sensor/active_hold/$name", "Active Hold", true);  
-  mqtt_homie_pub("homie/"HDEVICE"/sensor/active_hold/$datatype", "integer", true);
-  mqtt_homie_pub("homie/"HDEVICE"/sensor/active_hold/$settable", "true", true);
+  //mqtt_homie_pub("homie/"HDEVICE"/sensor/active_hold/$name", "Active Hold", true);  
+  strcpy(p, "/sensor/active_hold/$name");
+  mqtt_homie_pub(tmp, "Active Hold", true);  
+
+  //mqtt_homie_pub("homie/"HDEVICE"/sensor/active_hold/$datatype", "integer", true);
+  strcpy(p, "/sensor/active_hold/$datatype");
+  mqtt_homie_pub(tmp, "integer", true);
+
+  //mqtt_homie_pub("homie/"HDEVICE"/sensor/active_hold/$settable", "true", true);
+  strcpy(p, "/sensor/active_hold/$settable");
+  mqtt_homie_pub(tmp, "true", true);
+
+  // set the value of active_hold property in MQTT server, retain
+  strcpy(p, "/sensor/active_hold");
+  itoa(delaySeconds, hpfix, 10);
+  mqtt_homie_pub(tmp, hpfix, true);
 #endif
   
 }
@@ -89,7 +156,7 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
   // 'active', 'inactive' since we get the what we sent. Problem?
   // Set 'turnedOn' appropriately
 #ifndef OLD
-  if (String(topic).equals(HSUB)) {
+  if (String(topic).equals(hsub)) {
     // payload should be a string of digits 
     int d = messageTemp.toInt();
     if (d < 5)
@@ -99,7 +166,13 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
     delaySeconds = d;
     Serial.print("set delaySeconds to ");
     Serial.println(delaySeconds);
-  } 
+#if 0
+  } else if (String(topic).equals(hsubq)) {
+    // publish the value
+    String ds = String(delaySeconds);
+    //mqtt_homie_pub(HSUBQ, (char*)ds.c_str() , true); // causes infinite loop with hubitat
+#endif
+  }
 #else
   if (String(topic).equals(MQTT_CMD)) {
     if(messageTemp == "enable") {
@@ -146,13 +219,14 @@ void mqtt_reconnect() {
   while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
     // Attempt to connect
-    if (client.connect(MQTT_DEVICE)) {
+    if (client.connect(mqtt_device)) {
       Serial.println("connected");
       // Subscribe
 #ifdef OLD
       client.subscribe(MQTT_CMD);
 #else
-      client.subscribe(HSUB);
+      client.subscribe(hsub);
+      //client.subscribe(HSUBQ);  // infinite loop?
 #endif
     } else {
       Serial.print("failed, rc=");
@@ -184,7 +258,13 @@ void mqtt_publish(char *topic, char *payload) {
 #endif
 
 void mqtt_homie_pub(char *topic, char *payload, bool retain) {
-   int err;
+  int err;
+#if 0
+  Serial.print("pub ");
+  Serial.print(topic);
+  Serial.print(" ");
+  Serial.println(payload);
+#endif
   if (! client.publish(topic, payload, retain)) {
     int rc  = client.state();
     if (rc < 0) {

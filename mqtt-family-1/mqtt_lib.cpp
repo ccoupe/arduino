@@ -12,7 +12,7 @@
 //const char* ssid = WIFI_USER;
 //const char* password = WIFI_PASSWORD;
 const char* mqtt_server = MQTT_SERVER;
-
+char *homie_pub = HPUB;
 WiFiClient espClient;
 PubSubClient client(espClient);
 
@@ -40,13 +40,28 @@ void mqtt_setup() {
   setup_wifi();
   client.setServer(MQTT_SERVER, MQTT_PORT);
   client.setCallback(mqtt_callback);
-  // Create and Publish the infrastructure topics for Homie 
-  char *node = "homie/"HDEVICE"/$name";
-  Serial.println(node);
-  client.publish(node, "keystudio1");
-  client.publish("homie/"HDEVICE"/$bodes", "sensor");
+  mqtt_reconnect();
+#ifndef OLD  
+  // Create and Publish the infrastructure topics for Homie v3
+  mqtt_homie_pub("homie/"HDEVICE"/$homie", "3.0", true);
+  mqtt_homie_pub("homie/"HDEVICE"/$name", HNAME, true);
+  mqtt_homie_pub("homie/"HDEVICE"/$nodes", "sensor", true);
+  mqtt_homie_pub("homie/"HDEVICE"/sensor/$name", "motion detector", true);
+  mqtt_homie_pub("homie/"HDEVICE"/sensor/$type", "motion", true);
+  mqtt_homie_pub("homie/"HDEVICE"/sensor/$properties", "motion,active_hold", true);
+  // Property 'motion'
+  mqtt_homie_pub("homie/"HDEVICE"/sensor/motion/$name", "Motion State", true);
+  mqtt_homie_pub("homie/"HDEVICE"/sensor/motion/$datatype", "string", true);
+  mqtt_homie_pub("homie/"HDEVICE"/sensor/motion/$settable", "false", true);
+  // Property 'active_hold'
+  mqtt_homie_pub("homie/"HDEVICE"/sensor/active_hold/$name", "Active Hold", true);  
+  mqtt_homie_pub("homie/"HDEVICE"/sensor/active_hold/$datatype", "integer", true);
+  mqtt_homie_pub("homie/"HDEVICE"/sensor/active_hold/$settable", "true", true);
+#endif
+  
 }
 
+#ifdef OLD
 void mqtt_send_config() {
   char *tmpl = "conf={\"active_hold\":%d}";
   char msg[50];
@@ -55,11 +70,12 @@ void mqtt_send_config() {
   Serial.println(msg);
   mqtt_publish(MQTT_TOPIC, "active");
 }
+#endif
 
 void mqtt_callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message arrived on topic: ");
   Serial.print(topic);
-  Serial.print(". Message: ");
+  Serial.print(". payload: ");
   String messageTemp;
   // convert byte* to String
   for (int i = 0; i < length; i++) {
@@ -72,6 +88,19 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
   // check if the message is either "enabled", "disabled" or
   // 'active', 'inactive' since we get the what we sent. Problem?
   // Set 'turnedOn' appropriately
+#ifndef OLD
+  if (String(topic).equals(HSUB)) {
+    // payload should be a string of digits 
+    int d = messageTemp.toInt();
+    if (d < 5)
+       d = 5;
+    else if (d > 3600)
+       d = 3600;
+    delaySeconds = d;
+    Serial.print("set delaySeconds to ");
+    Serial.println(delaySeconds);
+  } 
+#else
   if (String(topic).equals(MQTT_CMD)) {
     if(messageTemp == "enable") {
       turnedOn = true;
@@ -107,9 +136,10 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
       }
     }
   }
+#endif
 }
 
-void reconnect() {
+void mqtt_reconnect() {
   // Loop until we're reconnected
   int cnt = 1;
   int len = 5;
@@ -119,7 +149,11 @@ void reconnect() {
     if (client.connect(MQTT_DEVICE)) {
       Serial.println("connected");
       // Subscribe
+#ifdef OLD
       client.subscribe(MQTT_CMD);
+#else
+      client.subscribe(HSUB);
+#endif
     } else {
       Serial.print("failed, rc=");
       Serial.println(client.state());
@@ -135,20 +169,37 @@ void reconnect() {
   }
 }
 
+#ifdef OLD
 void mqtt_publish(char *topic, char *payload) {
   int err;
   if (! client.publish(topic, payload)) {
     int rc  = client.state();
     if (rc < 0) {
-      Serial.println("dead connection, retrying");
-      reconnect();
+      Serial.print(rc);
+      Serial.println(" dead connection, retrying");
+      mqtt_reconnect();
     }
   }
 }
+#endif
 
+void mqtt_homie_pub(char *topic, char *payload, bool retain) {
+   int err;
+  if (! client.publish(topic, payload, retain)) {
+    int rc  = client.state();
+    if (rc < 0) {
+      Serial.print(rc);
+      Serial.println(" dead connection, retrying");
+      mqtt_reconnect();
+    }
+  }
+ 
+}
+
+// Called from sketches loop()
 void mqtt_loop() {
   if (!client.connected()) {
-    reconnect();
+    mqtt_reconnect();
   }
   client.loop();
 

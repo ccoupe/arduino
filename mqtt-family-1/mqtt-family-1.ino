@@ -76,8 +76,13 @@ void setup() {
 void loop() {
   mqtt_loop();
   if (havePir && state == INACTIVE) {
-    if (turnedOn) 
+    if (turnedOn) {
+#ifdef OLD
       mqtt_publish(MQTT_TOPIC, "active");
+#else
+      mqtt_homie_pub(HPUB, "active", false);
+#endif
+    }
     state = ACTIVE;
     Serial.println(" Motion Begin");
   }
@@ -93,8 +98,13 @@ void loop() {
       motionCount--;
       if (motionCount == 0) {
         // publish to MQTT
-        if (turnedOn) 
+        if (turnedOn) {
+#ifdef OLD
           mqtt_publish(MQTT_TOPIC, "inactive");
+#else
+          mqtt_homie_pub(HPUB, "inactive", false);
+#endif
+        }
         state = INACTIVE;
         Serial.println(" Motion End");
       }

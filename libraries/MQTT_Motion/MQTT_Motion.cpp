@@ -1,4 +1,3 @@
-
 // One day, this might be a class. For now, it's just C
 /*
  * Handles all of the mqtt interactions for motion sensors

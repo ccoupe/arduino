@@ -9,8 +9,12 @@
 *********/
 #include <Arduino.h>
 #include <Wire.h>
+#include <EEPROM.h>
+#include "MQTT_Motion.h"
 #include "Device.h"
 
+#define ACTIVE 1
+#define INACTIVE 0
 
 boolean turnedOn = true;  // controls whether device sends to MQTT - not used?
 int state = INACTIVE;
@@ -24,8 +28,10 @@ volatile uint32_t lastIsrAt = 0;
 
 volatile boolean havePir = false;
 
-#define DelayToOff 45
-unsigned int delaySeconds = DelayToOff;   // we want to set this variable from mqtt
+unsigned int delaySeconds = DelayToOff;   // we can set this variable from mqtt.
+                                          // it's also shadowed from Flash memory
+#define EEPROM_SIZE 2                     // a short int
+
 int motionCount = 0;
 
 // Interrupt handler for motion on AM312 pir
@@ -44,13 +50,49 @@ void IRAM_ATTR onTimer(){
   xSemaphoreGiveFromISR(timerSemaphore, NULL);
 }
 
+int delay_get() {
+  return delaySeconds;
+}
+void delay_set(int val) {
+  // don't update flash unless value changes
+  if (val != delaySeconds) {
+    delaySeconds = val;
+    //update_flash(val);
+    EEPROM.write(0, (delaySeconds & 0xFF00));
+    EEPROM.write(1, (delaySeconds & 0x00FF));
+    EEPROM.commit();
+  
+    Serial.print("set delaySeconds to ");
+    Serial.println(delaySeconds);
+  } else {
+    Serial.println("skipping flash writing");
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   Serial.println("Starting");
+  
+  EEPROM.begin(EEPROM_SIZE);
+  byte h,l = 0x0FF;
+  h = EEPROM.read(0);
+  l = EEPROM.read(1);
+  if (h == 255 && l == 255) {
+    // uninitialized
+    Serial.println("one time flash init");
+    EEPROM.write(0, (delaySeconds & 0xFF00));
+    EEPROM.write(1, (delaySeconds & 0x00FF));
+    EEPROM.commit();
+  } else {
+    delaySeconds = (h << 8) | l;
+  }
+  
+  Serial.print("EEPROM: ");
+  Serial.print(h); Serial.print(" "); Serial.println(l);
+  
   mqtt_setup(WIFI_ID, WIFI_PASSWORD, MQTT_SERVER, MQTT_PORT, MQTT_DEVICE,
-      HDEVICE, HNAME, HPUB, HSUB);
-  //client.setServer(mqtt_server, 1883);
-  //client.setCallback(callback);
+      HDEVICE, HNAME, delay_get, delay_set);
+
   // Create semaphore to inform us when the timer has fired
   timerSemaphore = xSemaphoreCreateBinary();
 
@@ -80,11 +122,7 @@ void loop() {
       
   if (havePir && state == INACTIVE) {
     if (turnedOn) {
-#ifdef OLD
-      mqtt_publish(MQTT_TOPIC, "active");
-#else
-      mqtt_homie_pub(HPUB, "active", false);
-#endif
+      mqtt_homie_active(true); 
     }
     state = ACTIVE;
     Serial.println(" Motion Begin");
@@ -100,13 +138,8 @@ void loop() {
     } else if (motionCount > 0) {
       motionCount--;
       if (motionCount == 0) {
-        // publish to MQTT
         if (turnedOn) {
-#ifdef OLD
-          mqtt_publish(MQTT_TOPIC, "inactive");
-#else
-          mqtt_homie_pub(HPUB, "inactive", false);
-#endif
+          mqtt_homie_active(false); 
         }
         state = INACTIVE;
         Serial.println(" Motion End");

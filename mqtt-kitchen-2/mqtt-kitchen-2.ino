@@ -6,28 +6,16 @@
  
 *********/
 #include <Arduino.h>
-#include <WiFi.h>
-#include <PubSubClient.h>
 #include <Wire.h>
-#include <Adafruit_Sensor.h>
+#include "Device.h"
+#include "MQTT_Motion.h"
+#include <EEPROM.h>
 
-// Replace the next variables with your SSID/Password combination
-const char* ssid = "CJCNET";
-const char* password = "LostAgain2";
-
-// Add your MQTT Broker IP address, device name, topic 
-const char* mqtt_server = "192.168.1.7";
-#define MQTT_DEVICE "ESP32_Family2"
-#define MQTT_TOPIC "sensors/family/motion2"
-#define MQTT_CMD   "sensors/family/motion2"
-
-boolean turnedOn = true;  // controls whether device sends to MQTT
+#define EEPROM_SIZE 2                     // a short int
 #define ACTIVE 1
 #define INACTIVE 0
 int state = INACTIVE;
 
-WiFiClient espClient;
-PubSubClient client(espClient);
 long lastMsg = 0;
 char msg[50];
 int value = 0;
@@ -39,16 +27,13 @@ portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 volatile uint32_t isrCounter = 0;
 volatile uint32_t lastIsrAt = 0;
 
-// LED Pin - built-in blue led on some boards
-//const int led = 2;
-
 // RCWL-0516 Microwave motion sensor
-const int mwSensor = 5;
+//const int mwSensor = 5;
 volatile boolean haveMw = false;      // set by ISR
 
 // AM312 pir motion sensor
 //#define  pirSensor 16
-#define  pirSensor 4
+//#define  pirSensor 4
 volatile boolean havePir = false;
 
 #define DelayToOff 25
@@ -77,68 +62,51 @@ void IRAM_ATTR onTimer(){
   xSemaphoreGiveFromISR(timerSemaphore, NULL);
 }
 
-void setup_wifi() {
-  delay(10);
-  // We start by connecting to a WiFi network
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
-
-  WiFi.begin((char *)ssid, password);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
+int delay_get() {
+  return delaySeconds;
 }
-
-void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Message arrived on topic: ");
-  Serial.print(topic);
-  Serial.print(". Message: ");
-  String messageTemp;
-  // convert byte* to String
-  for (int i = 0; i < length; i++) {
-    Serial.print((char)payload[i]);
-    messageTemp += (char)payload[i];
-  }
-  Serial.println();
-
-  // If a message is received on the topic 
-  // check if the message is either "enabled", "disabled" or
-  // 'active', 'inactive' since we get the what we sent. Problem?
-  // Set 'turnedOn' appropriately
-  if (String(topic) == MQTT_CMD) {
-    if(messageTemp == "enable") {
-      turnedOn = true;
-      state = INACTIVE;
-      Serial.println("mqtt sent an enable");
-    } else if (messageTemp == "disable") {
-      turnedOn = false;
-      state = INACTIVE;
-      Serial.println("mqtt sent a disable");
-    }
-    else if (messageTemp.startsWith("delay=")) {
-      int v = messageTemp.substring(6).toInt();
-      if (v >= 5) {
-        Serial.print("mqtt delay = "); Serial.println(v);
-        delaySeconds = v;
-      }
-    }
+void delay_set(int val) {
+  // don't update flash unless value changes
+  if (val != delaySeconds) {
+    delaySeconds = val;
+#ifdef USE_FLASH
+    //update_flash(val);
+    EEPROM.write(0, (delaySeconds & 0xFF00));
+    EEPROM.write(1, (delaySeconds & 0x00FF));
+    EEPROM.commit();
+#endif  
+    Serial.print("set delaySeconds to ");
+    Serial.println(delaySeconds);
+  } else {
+    Serial.println("skipping flash writing");
   }
 }
 
 void setup() {
   Serial.begin(115200);
+  Serial.println("Starting");
 
-  setup_wifi();
-  client.setServer(mqtt_server, 1883);
-  client.setCallback(callback);
+#ifdef USE_FLASH
+  EEPROM.begin(EEPROM_SIZE);
+  byte h,l = 0x0FF;
+  h = EEPROM.read(0);
+  l = EEPROM.read(1);
+  if (h == 255 && l == 255) {
+    // uninitialized
+    Serial.println("one time flash init");
+    EEPROM.write(0, (delaySeconds & 0xFF00));
+    EEPROM.write(1, (delaySeconds & 0x00FF));
+    EEPROM.commit();
+  } else {
+    delaySeconds = (h << 8) | l;
+  }
+  Serial.print("EEPROM: ");
+  Serial.print(h); Serial.print(" "); Serial.println(l);
+#endif
+  
+  mqtt_setup(WIFI_ID, WIFI_PASSWORD, MQTT_SERVER, MQTT_PORT, MQTT_DEVICE,
+      HDEVICE, HNAME, delay_get, delay_set);
+
   // Create semaphore to inform us when the timer has fired
   timerSemaphore = xSemaphoreCreateBinary();
 
@@ -166,40 +134,16 @@ void setup() {
   pinMode(mwSensor, INPUT_PULLUP);
   // Set motionSensor pin as interrupt, assign interrupt function and set RISING mode
   attachInterrupt(digitalPinToInterrupt(mwSensor), detectsMovement, RISING);
-
-  //pinMode(led, OUTPUT);
-  //digitalWrite(led, LOW);
 }
 
 
-void reconnect() {
-  // Loop until we're reconnected
-  while (!client.connected()) {
-    Serial.print("Attempting MQTT connection...");
-    // Attempt to connect
-    if (client.connect(MQTT_DEVICE)) {
-      Serial.println("connected");
-      // Subscribe
-      client.subscribe(MQTT_CMD);
-    } else {
-      Serial.print("failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
-      // Wait 5 seconds before retrying
-      delay(5000);
-    }
-  }
-}
 
 void loop() {
-  if (!client.connected()) {
-    reconnect();
-  }
-  client.loop();
+
+  mqtt_loop();
 
   if (haveMw && havePir && state == INACTIVE) {
-    if (turnedOn) 
-      client.publish(MQTT_TOPIC, "active");
+    mqtt_homie_active(true);
     state = ACTIVE;
     Serial.println(" Motion Begin");
   }
@@ -219,8 +163,7 @@ void loop() {
       motionCount--;
       if (motionCount == 0) {
         // publish to MQTT
-        if (turnedOn) 
-          client.publish(MQTT_TOPIC, "inactive");
+        mqtt_homie_active(false);
         state = INACTIVE;
         Serial.println(" Motion End");
       }

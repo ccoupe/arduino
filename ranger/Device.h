@@ -12,9 +12,20 @@
 #define HDEVICE "trumpy_ranger"
 #define HNAME "ESP32 in TrumpyBear"        // Display name is OK
 
-//  Pin numbers
+//  HC-SR04 ultrasonic sensorPin numbers
 #define echoPin 23
 #define trigPin 4
 
+// Define display - i2c OLED or undef for LCD 160x
+//#define DISPLAY_U8
+
+#ifdef DISPLAY_U8
+#define DISPLAY_COLUMNS 8
+#define DISPLAY_LINES 2
+#else // LCD1602
+#define LCD_I2C_ADDR 0x27
+#define DISPLAY_COLUMNS 16
+#define DISPLAY_LINES 2
+#endif
 
 #endif

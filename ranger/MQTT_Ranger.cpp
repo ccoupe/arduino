@@ -99,7 +99,7 @@ void mqtt_setup(char *wid, char *wpw, char *mqsrv, int mqport, char* mqdev,
   hpub = (char *)malloc(6 + strlen(hdevice) + 22); // wastes a byte or two.
   strcpy(hpub, "homie/");
   strcat(hpub, hdevice);
-  strcat(hpub, "autoranger");
+  strcat(hpub, "/autoranger");
   
   // Create "homie/"HDEVICE"/autoranger/status"  
   hpubst = (char *)malloc(strlen(hpub) + 8);
@@ -117,6 +117,11 @@ void mqtt_setup(char *wid, char *wpw, char *mqsrv, int mqport, char* mqdev,
   strcpy(hsub, hsubq);
   strcat(hsub, "/set");
   hsubCmd = strdup(hsub);
+  
+  // Create "homie/"HDEVICE"/autoranger/distance for publishing
+  hpubDistance = (char *)malloc(strlen(hpub) + 12);
+  strcpy(hpubDistance, hpub);
+  strcat(hpubDistance, "/distance");
 
   // create the subscribe topics for "homie/"HDEVICE"/display/cmd/set
   hsubDspCmd = (char *)malloc(6+strlen(hdevice)+20); // wastes a byte or two.
@@ -250,16 +255,17 @@ void mqtt_callback(char* topic, byte* payl, unsigned int length) {
 
   if (! strcmp(hsubCmd, topic)) { 
     int d = atoi(payload);
-    if (d < 2)
-      d = 2;
+    if (d < 0)
+      d = 0;
     else if (d > 3600)
       d = 3600;
     rgrCBack(d);
   } else if (! strcmp(hsubDspCmd, topic)) {
-    if (! strcmp(payload, "on")) {
-      dspCBack(true, null);
-    } else if (! strcmp(payload, "off")) {
-      dspCBack(false, null);
+    if (!strcmp(payload, "on") || !strcmp(payload, "true")) {
+      dspCBack(true, (char*)0);
+    } else if ((! strcmp(payload, "off")) || (!strcmp(payload, "false" ))) {
+      Serial.println("display set off");
+      dspCBack(false, (char*)0);
     }
   } else if (! strcmp(hsubDspTxt, topic)) {
     dspCBack(true, payload);
@@ -327,7 +333,10 @@ void mqtt_homie_pub(char *topic, char *payload, bool retain) {
 
 void mqtt_ranger_set_dist(int d) {
  char t[8];
+ Serial.print("mqtt pub");
  itoa(d, t, 10);
+ Serial.print(hpubDistance);
+ Serial.println(t);
  mqtt_homie_pub(hpubDistance, t, false);
 }
 

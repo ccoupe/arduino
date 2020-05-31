@@ -28,4 +28,7 @@
 #define DISPLAY_LINES 2
 #endif
 
+// Do continuous ranging & display 'after' target distance
+//#define CONTINUOS
+
 #endif

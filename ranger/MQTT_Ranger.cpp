@@ -197,7 +197,6 @@ void mqtt_setup(char *wid, char *wpw, char *mqsrv, int mqport, char* mqdev,
   strcpy(p, "/display/$properties");
   mqtt_homie_pub(tmp, "cmd,text", true);
 
-
   // Property 'cmd' of 'display' node
   // "homie/"HDEVICE"/display/cmd/$name ->, Unsanitized hname
   strcpy(p, "/display/cmd/$name");
@@ -219,7 +218,6 @@ void mqtt_setup(char *wid, char *wpw, char *mqsrv, int mqport, char* mqdev,
   strcpy(p,"/display/cmd/$retained");
   mqtt_homie_pub(tmp, "false", true);
   
-
   // Property 'text' of 'display' node
   
   // "homie/"HDEVICE"/display/text/$name", -> "active_hold" 
@@ -340,7 +338,7 @@ void mqtt_ranger_set_dist(int d) {
  mqtt_homie_pub(hpubDistance, t, false);
 }
 
-// Called from sketche's loop()
+// Called from sketch's loop()
 void mqtt_loop() {
   if (!client.connected()) {
     mqtt_reconnect();

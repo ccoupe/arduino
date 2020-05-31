@@ -1,6 +1,6 @@
 /*
  * Mqtt-Ranger is an HR-504 ultrasonic sensor to meausre distance in cm.
- * and a HiLetgo 1.3" i2c OLED LCD. Two different 'nodes' on once device
+ * and a HiLetgo 1.3" i2c OLED LCD. Two different 'nodes' on one device
  * in the Homie MQTT world. 
  * Measuring can 'take over' the display so they are not independent
 */
@@ -75,10 +75,19 @@ void doRanger(int dist) {
       // check for canceled.
       if (rgr_running == false)
         break;
-      if (d > 2 && d < 500)
+      if (d > 2 && d < 500) {
         if (dist_display(d, target_d) == true) {
+#ifdef CONTINUOS
           wait_for_pub(d);
+#else
+          mqtt_ranger_set_dist(d);
+          rgr_running = false;
+          break;
+#endif
         }
+      } else {
+        doDisplay(true, "Over Here!");
+      }
       d = get_distance();
     }
     Serial.println("end DoRanger");

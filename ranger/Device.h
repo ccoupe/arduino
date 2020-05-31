@@ -28,7 +28,14 @@
 #define DISPLAY_LINES 2
 #endif
 
-// Do continuous ranging & display 'after' target distance
-//#define CONTINUOS
+/* 
+ * Ranger modes
+ * ONCE - signal once when object stop withing given distance (+/-) 
+ * CONTINOUS - single whenever object within distance (multiple signals)
+ * FREE - signal continously - makes for a very busy MQTT
+ */
+#define RGR_ONCE  0    
+#define RGR_CONTINOUS 1
+#define RGR_FREE  2
 
 #endif

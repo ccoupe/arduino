@@ -58,32 +58,43 @@ boolean rgr_running = false;
 uint32_t next_pub = 1;
 uint32_t next_tick = 0;
 
-void doRanger(int dist) {
+void doRanger(int rgrmode, int dist) {
   int next_pub = 0;
   if (dist == 0) {   
     rgr_running = false;
     Serial.println("set to zero, stopping?");
     return;
+  }
+  Serial.println("Begin ranger");
+  if (rgrmode == RGR_FREE) {
+    int d;
+    rgr_running = true;
+    while (rgr_running == true) {
+      char tmp[8];
+      d = get_distance();
+      itoa(d, tmp, 10);
+      doDisplay(true, tmp);
+      mqtt_ranger_set_dist(d);
+    }
   } else {
     target_d = dist;
     rgr_running = true;
     // don't run for more than a few minutes
     uint32_t tend = isrCounter + (1 * 60);
     int d = get_distance();
-    Serial.println("Begin ranger");
     while (isrCounter < tend) {
       // check for canceled.
       if (rgr_running == false)
         break;
       if (d > 2 && d < 500) {
         if (dist_display(d, target_d) == true) {
-#ifdef CONTINUOS
-          wait_for_pub(d);
-#else
-          mqtt_ranger_set_dist(d);
-          rgr_running = false;
-          break;
-#endif
+          if (rgrmode == RGR_CONTINOUS)
+            wait_for_pub(d);
+          else {
+            mqtt_ranger_set_dist(d);
+            rgr_running = false;
+            break;
+          }
         }
       } else {
         doDisplay(true, "Over Here!");

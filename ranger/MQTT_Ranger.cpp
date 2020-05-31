@@ -33,11 +33,14 @@ char *hsub;
 char *hsubq;
 char *hpubst;             // ..autoranger/$status <- publish to 
 char *hpubDistance;       // ..autoranger/distance <- publish to
-char *hsubCmd;            // ..autoranger/cmd/set -> subscribe to
+char *hsubDistance;       // ..autoranger/distance/set -> subcribe to
+char *hsubMode;            // ..autoranger/mode/set -> subscribe to
 char *hsubDspCmd;         // ../display/cmd/set  -> subscribe to
 char *hsubDspTxt;         // ../display/text/set -> subscribe to
-void (*rgrCBack)(int newval); // does autorange to near newval
-void (*dspCBack)(boolean st, char *str);                              
+void (*rgrCBack)(int mode, int newval); // does autorange to near newval
+void (*dspCBack)(boolean st, char *str);       
+
+int rgr_mode = RGR_ONCE;
 
 byte macaddr[6];
 char *macAddr;
@@ -83,7 +86,7 @@ static void setup_wifi() {
 }
 
 void mqtt_setup(char *wid, char *wpw, char *mqsrv, int mqport, char* mqdev,
-    char *hdev, char *hnm, void (*ccb)(int), void (*dcb)(boolean, char *) ) {
+    char *hdev, char *hnm, void (*ccb)(int, int), void (*dcb)(boolean, char *) ) {
 
   rgrCBack = ccb;
   dspCBack = dcb;
@@ -106,28 +109,33 @@ void mqtt_setup(char *wid, char *wpw, char *mqsrv, int mqport, char* mqdev,
   strcpy(hpubst, hpub);
   strcat(hpubst, "/status");
 
-  // Create "homie/"HDEVICE"/autoranger/cmd
+  // Create "homie/"HDEVICE"/autoranger/mode
   hsubq = (char *)malloc(6+strlen(hdevice)+30); // wastes a byte or two.
   strcpy(hsubq, "homie/");
   strcat(hsubq, hdevice);
-  strcat(hsubq, "/autoranger/cmd");
+  strcat(hsubq, "/autoranger/mode");
 
-  // Create "homie/"HDEVICE"/autoranger/cmd/set
+  // Create "homie/"HDEVICE"/autoranger/mode/set
   hsub = (char *)malloc(strlen(hsubq) + 6);
   strcpy(hsub, hsubq);
   strcat(hsub, "/set");
-  hsubCmd = strdup(hsub);
+  hsubMode = strdup(hsub);
   
   // Create "homie/"HDEVICE"/autoranger/distance for publishing
   hpubDistance = (char *)malloc(strlen(hpub) + 12);
   strcpy(hpubDistance, hpub);
   strcat(hpubDistance, "/distance");
 
+  // Create "homie/"HDEVICE"/autoranger/distance/set topic for subscribe 
+  hsubDistance = (char *)malloc(strlen(hpubDistance) + 5);
+  strcpy(hsubDistance, hpubDistance);
+  strcat(hsubDistance, "/set");
+  
   // create the subscribe topics for "homie/"HDEVICE"/display/cmd/set
   hsubDspCmd = (char *)malloc(6+strlen(hdevice)+20); // wastes a byte or two.
   strcpy(hsubDspCmd, "homie/");
   strcat(hsubDspCmd, hdevice);
-  strcat(hsubDspCmd, "/display/cmd/set");
+  strcat(hsubDspCmd, "/display/mode/set");
 
   // create the subscribe topics for "homie/"HDEVICE"/display/text/set
   hsubDspTxt = (char *)malloc(6+strlen(hdevice)+20); // wastes a byte or two.
@@ -251,13 +259,28 @@ void mqtt_callback(char* topic, byte* payl, unsigned int length) {
   Serial.print(" payload: ");
   Serial.println(payload);
 
-  if (! strcmp(hsubCmd, topic)) { 
+  if (! strcmp(hsubMode, topic)) {
+    if (! strcmp(payload, "once")) {
+      rgr_mode = RGR_ONCE;
+    } else if (! strcmp(payload, "continous")) {
+      rgr_mode = RGR_CONTINOUS;
+    } else if (! strcmp(payload, "free")) {
+      rgr_mode = RGR_FREE;
+      rgrCBack(rgr_mode, 3600);
+    } else if (! strcmp(payload, "off")) {
+      rgr_mode = RGR_ONCE;
+      rgrCBack(rgr_mode, 0);
+    } else {
+      Serial.println("mode: bad payload");
+      rgr_mode = RGR_ONCE;
+    }
+  } else if (! strcmp(hsubDistance, topic)) { 
     int d = atoi(payload);
     if (d < 0)
       d = 0;
     else if (d > 3600)
       d = 3600;
-    rgrCBack(d);
+    rgrCBack(rgr_mode, d);
   } else if (! strcmp(hsubDspCmd, topic)) {
     if (!strcmp(payload, "on") || !strcmp(payload, "true")) {
       dspCBack(true, (char*)0);
@@ -281,9 +304,14 @@ void mqtt_reconnect() {
       Serial.println("connected");
 
       // Subscribe to <dev/node/property>/set
-      client.subscribe(hsubCmd);
+      client.subscribe(hsubMode);
       Serial.print("listening on topic ");
-      Serial.println(hsubCmd);
+      Serial.println(hsubMode);
+      
+      // Subscribe to <dev/node/property>/set
+      client.subscribe(hsubDistance);
+      Serial.print("listening on topic ");
+      Serial.println(hsubDistance);
 
       // Subscribe to <dev/node/property>/set
       Serial.print("listening on topic ");

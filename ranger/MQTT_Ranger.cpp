@@ -267,6 +267,9 @@ void mqtt_callback(char* topic, byte* payl, unsigned int length) {
     } else if (! strcmp(payload, "free")) {
       rgr_mode = RGR_FREE;
       rgrCBack(rgr_mode, 3600);
+    } else if (! strcmp(payload, "snap")) {
+      rgr_mode = RGR_SNAP;
+      rgrCBack(rgr_mode, 3600);
     } else if (! strcmp(payload, "off")) {
       rgr_mode = RGR_ONCE;
       rgrCBack(rgr_mode, 0);

@@ -37,5 +37,6 @@
 #define RGR_ONCE  0    
 #define RGR_CONTINOUS 1
 #define RGR_FREE  2
+#define RGR_SNAP 3
 
 #endif

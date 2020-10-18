@@ -66,7 +66,10 @@ void doRanger(int rgrmode, int dist) {
     return;
   }
   Serial.println("Begin ranger");
-  if (rgrmode == RGR_FREE) {
+  if (rgrmode == RGR_SNAP) {
+    int d = get_distance();
+    mqtt_ranger_set_dist(d);
+  } else if (rgrmode == RGR_FREE) {
     int d;
     rgr_running = true;
     while (rgr_running == true) {
